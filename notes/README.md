@@ -76,13 +76,15 @@ Streaming data stores guarantee that **data is stored in the order it was produc
 
 ### Kafka on Command Line Interface
 
-`kafka-topics --list --zookeeper localhost:2181` to **display all topics**.`--zookeeper` is needed so that the CLI tool can talk to Kafka cluster.
+`kafka-topics --list --zookeeper localhost:2181` to **display all topics**.`--zookeeper`(deprecated) or `--bootstrap-server` is needed so that the CLI tool can talk to Kafka cluster.
 
 `kafka-topics --create --topic "my-first-topic" --partitions 1 --replication-factor 1 --zookeeper localhost:2181` to **create a new topic**. 
 
 `kafka-console-producer --topic "my-first-topic" --broker-list PLAINTEXT://localhost:9092` to **produce data to the topic**.  `--broker-list` is needed to tell Kafka which broker to connect to.
 
 `kafka-console-consumer --topic "my-first-topic" --bootstrap-server PLAINTEXT://localhost:9092 --from-beginning` to**consume data from a topic**. Note that `--bootstrap-server` instead of `--broker-list` is used to connect to the broker. Add the switch `--from-beginning` to show all historical data in the topic.
+
+In Python, use the `confluent-kafka-python` client library to create topic, producer, and consumer. See Lesson 1 chapter 16!
 
 # Stream Processing in Kafka
 
