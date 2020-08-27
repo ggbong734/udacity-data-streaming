@@ -1,4 +1,4 @@
-_Notes on Kafka | August 2020_ 
+_Notes on Kafka Lesson 1 | August 2020_ 
 
 # Data Streaming via Kafka
 
@@ -85,9 +85,6 @@ Streaming data stores guarantee that **data is stored in the order it was produc
 `kafka-console-consumer --topic "my-first-topic" --bootstrap-server PLAINTEXT://localhost:9092 --from-beginning` to**consume data from a topic**. Note that `--bootstrap-server` instead of `--broker-list` is used to connect to the broker. Add the switch `--from-beginning` to show all historical data in the topic.
 
 In Python, use the `confluent-kafka-python` client library to create topic, producer, and consumer. See Lesson 1 chapter 16!
-
-# Stream Processing in Kafka
-
 
 # Glossary
 
