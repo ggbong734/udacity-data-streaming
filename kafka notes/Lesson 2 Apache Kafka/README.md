@@ -33,11 +33,15 @@ _Notes on Kafka Lesson 2 | August 2020_
 
 ---
 
+<p align="center"><img src="../images/kafka_architecture.png" height= "400"/></p>
+
 # Apache Kafka
 
 Kafka is built on **JVM**.
 
 Kafka servers are referred to as **brokers**. Clusters may consist of one or many brokers.
+
+Brokers are **intermediaries between producer applications and consumer applications**.
 
 Apache Zookeeper is used by Kafka to determine which broker is the leader of a given partition and topic. 
 
@@ -117,7 +121,7 @@ Asynchronous producers (common): send data and immediately continue
 - can offer callbacks when message is delivered or if error occurs
 - can also fire and forget and don't check for broker receiving data
 
-Use `Producer().flush()` to wait for message to be delivered (synchronous)
+Use `producer.flush()` to wait for message to be delivered (synchronous)
 
 #### Message Serialization
 
@@ -137,14 +141,152 @@ Set `enable.idempotence` to `True` (idempotence = process which does not change 
 
 If `compression.type` is set on the producer it is done on the client machine, if compression is set on broker, it is done on broker.
 - If both are set then two compressions are performed (wasteful)
+- lz4 and snappy are the fastest algorithms (if compression speed is critical)
+- zstd and gzip are slower but provide higher compression ratio (if network overhead is critical)
 
 `acks` determine number of required In Sync Replica (ISR) confirmations. (number of replica to receive message from client before before moving on). 
-- set default to `all` or `-1`
+- set default to `all` or `-1` (all brokers must acknowledge receipt)
 - don't add this complexity unless for high throughput and performance begin to lag
 
+#### Batching configuration
+
+[Configuration options for producer batching](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)
+
+Messages may be batched before producer sends to client (not each message individually). 
+
+In python here are the defaults:
+- 1 GB has been accumulated
+- 1000 messages have accumulated
+- 0.5 secs has passed since last send
+
+Kafka allows configuration of these batch settings. Be careful to not let local machine overrun.
+
+See Lesson 2 Ch. 24 "configure a producer" to see how to set max. no. of messages in buffer. 
+
+## Kafka consumers
+
+Set topics to subscribe to. If topic does not exist, Kafka will automatically create one (not good).
+
+Next is to `poll` for data by the client. 
+
+### Consumer offset
+
+The offset is the last messsage a consumer successfully processed. 
+- useful to tell Kafka where to start on restart
+- Offsets are committed to Kafka, automatically on default
+- Offsets commits are made asynchronously by client library (can be set to synchronous)
+
+If we want consumer to start from first known message, change `auto.offset.reset` to `earliest`.
+On subsequent restarts, it will pick up whereever it left off.
+
+To set offset to the start from beginning each time, add the on_assign option when subscribing
+`consumer.subscribe([topic_name], on_assign=on_assign)`
+And then in the on_assign callback function:
+set `partition.offset = OFFSET_BEGINNING`
+
+See Lesson 2 Chapter 28 for details.
+
+### Consumer Groups
+
+The `group.id` is required and tells Kafka which consumer group the consumer belong to. 
+
+Consumer groups increase throughput and processing speed by allowing many consumers of topic data. 
+
+Only one consumer in the consumer group receives any message. In other words, partitions in a topic is assigned to a consumer each.
+
+If we want a consumer to inspect every message, only have one member in the consumer group.
+
+Consumer group *rebalance* when a consumer leaves or joins a group.
+
+Consumer groups increase **fault tolerance and resiliency** by **automatically redistributing partition assignments** if one or more members of the consumer group fail.
+
+### Consumer Topic Subscription
+
+If we know a specific topic:
+`consumer.subscribe("com.udacity.lesson2.quiz.results"))`
+
+If we want to subscribe to a group of topics:
+`consumer.subscribe("^com.udacity.lesson2*)`
+
+The topic name must be **prefixed with "^" for the client to recognize that it is regular expression**.
+
+Set `allow.auto.create.topics` to false so that the topic isn’t created by the consumer if it does not yet exist.
+
+### Consumer Deserializer
+
+Data being consumed **must be deserialized in the same format it was serialized in**.
+
+If the producer used JSON, you will need to deserialize the data using a JSON library!
+
+If the producer used bytes or string data, you may not have to do anything.
+
+### Retrieving Data from Kafka
+
+The Consumer Poll Loop fetches data
+
+```
+while True:
+	message = consumer.poll(timeout=1.0) # pulls data one message at a time
+	if message is None:
+		print("no message received by consumer")
+	elif message.error() is not None:
+		print("error from consumer {}".format(message.error()))
+	else:
+		print("consumed message {0}: {1}".format(message.key(), message.value()))
+```
+We can also use `consume` to pull multiple messages at once.E.g. `messages = consumer.consume(5, timeout=1.0)`
+
+Make sure to call `close()` on your consumer
+
+## Metrics for Performance
+
+### Consumer Performance
+
+**Consumer lag** measures how far behind consumer is. There is always some lag. 
+> Lag = Latest Topic Offset - Consumer Topic Offset
+
+**Messages per second** indicates throughput
+
+Adding more consumers should help improve lag.
+
+Adding compression does not help as it may reduce network overhead but add CPU overhead when decompressing.
+
+Removing compression also doesn't help as it increases network overhead.
+
+### Producer Performance
+
+**Producer Request Latency**. We want latency to be small and consistent.
+> Latency = time broker received - time produced
+
+High latency may indicate too many partitions, too many replica, `acks` settings too high.
+
+**Producer response rate** tracks the rate the broker responds to the producer (broker gives indication of message status).
+
+### Broker Performance
+
+Broker is positioned between producer and consumer.
+
+Track **disk usage**, high disk usage can cause outages.
+
+Track **network usage**, may saturate network cards causing inavailability.
+
+**Election frequency**. High election rate may indicate broker is unstable. Elections are disruptive as it stops consume/produce.
+
+### Deleting user data (Privacy)
+
+Privary regulations like GDPR and CCPA
+
+First strategy is log expiration. We can set message expiration on topics that is of shorter duration than the requirement.
+
+Second strategy is log compaction. Publish `null` value to the key that we want to delete. Kafka will compact the log and update the value of the key to `null`. However, it may take time before compaction happens, and user data is spread over many topics and not only stored at the user id key.
+
+The best way is to use Encrypted user key. New data is encrypted and the encryption key is stored in a separate topic (encription key topic). To remove data, we just delete the encription key from the encryption key topic. Now we can no longer access the data without the encryption key.  
 
 
 #### Resources
 
 - [What is Zookeeper](https://www.cloudkarafka.com/blog/2018-07-04-cloudkarafka_what_is_zookeeper.html)
 - [Kafka Design motivation](https://kafka.apache.org/documentation/#design)
+- [Compression type pros and cons](https://blog.cloudflare.com/squeezing-the-firehose/)
+- [DataDog monitoring Kafka performance](https://www.datadoghq.com/blog/monitoring-kafka-performance-metrics/)
+- [NewRelic monitoring Kafka](https://blog.newrelic.com/engineering/new-relic-kafkapocalypse/)
