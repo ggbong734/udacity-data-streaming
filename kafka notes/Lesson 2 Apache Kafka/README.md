@@ -46,12 +46,12 @@ Zookeeper keeps track of which brokers are part of Kafka cluster. Zookeeper stor
 Zookeeper allows broker to enter and leave a cluster easily (grow easily as usage increases).
 
 
-<p align="center"><img src="../images/zookeeper.png" height= "240"/></p>
+<p align="center"><img src="../images/zookeeper.png" height= "300"/></p>
 
 
 Kafka stores data in text files in broker disk.
 
-<p align="center"><img src="../images/file_storage.png" height= "220"/></p>
+<p align="center"><img src="../images/file_storage.png" height= "300"/></p>
 
 ### Kafka partitions
 
@@ -61,7 +61,7 @@ A partition contains an ordered subset of data in the topic.
 
 Every partition has a single leader broker, elected by Zookeeper. Producers evenly hash data to partitions.
 
-<p align="center"><img src="../images/partitions_broker.png" height= "240"/></p>
+<p align="center"><img src="../images/partitions_broker.png" height= "300"/></p>
 
 ### Kafka replication
 
@@ -88,10 +88,63 @@ Ordering is guaranteed only within a topic's partitions.
 Determine the number of partitions: 
 > Number of Partitions = Max(Overall Throughput/Producer Throughput, Overall Throughput/Consumer Throughput)
 
+Kafka naming convention: 
+- alphanumeric characters (a-z, A-Z, 0-9, ".", "-")
+- Example `com.udacity.lesson.quiz_complete`
+- where `com.udacity` is the domain, `lesson` is the model, and `quiz_complete` is the event
+
+Topics may expire based on time and size limit. Using `retention.bytes` and `retention.ms` settings. When data expires it is deleted (set using `cleanup.policy` set to `delete`)
+
+Log compaction removes repeat messages in Kafka topic. (`cleanup.policy` set to `compact`)
+
+Compression options are available using lz4, ztsd, snappy, gzip (using `compression.type` setting)
+
+**Never put more than one event in a single topic**. Topic should store data for one type of event only.
+
+### Creating Topics in Kafka
+
+Always manually create topic (or use bash). Don't rely on automatic topic creation. 
+
+## Kafka Producers
+
+Synchronous producers (rare): send data to Kafka and block program until broker has confirmed receipt
+- waiting for delivery of credit card transaction before moving forward
+- not the default
+- used where data loss cannot be tolerated
+
+Asynchronous producers (common): send data and immediately continue
+- maximize throughput to Kafka
+- can offer callbacks when message is delivered or if error occurs
+- can also fire and forget and don't check for broker receiving data
+
+Use `Producer().flush()` to wait for message to be delivered (synchronous)
+
+#### Message Serialization
+
+Transforming data from internal representation into a format suitable for data store (e.g. Avro, CSV).
+- most common serialization type binary, csv, json, avro
+- never mix serialization type in a topic (create new one if you wish to change) 
+
+#### Producer Configuration
+
+[Configuration options for kafka python](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)
+
+Always set `client.id` for improved logging and debugging!
+
+Configure `retries` to ensure data is delivered.
+
+Set `enable.idempotence` to `True` (idempotence = process which does not change result if happens twice)
+
+If `compression.type` is set on the producer it is done on the client machine, if compression is set on broker, it is done on broker.
+- If both are set then two compressions are performed (wasteful)
+
+`acks` determine number of required In Sync Replica (ISR) confirmations. (number of replica to receive message from client before before moving on). 
+- set default to `all` or `-1`
+- don't add this complexity unless for high throughput and performance begin to lag
 
 
 
 #### Resources
 
-[What is Zookeeper](https://www.cloudkarafka.com/blog/2018-07-04-cloudkarafka_what_is_zookeeper.html)
-[Kafka Design motivation](https://kafka.apache.org/documentation/#design)
+- [What is Zookeeper](https://www.cloudkarafka.com/blog/2018-07-04-cloudkarafka_what_is_zookeeper.html)
+- [Kafka Design motivation](https://kafka.apache.org/documentation/#design)
