@@ -108,20 +108,43 @@ Lesson 4 Chapter 19 shows how to use HTTP REST Proxy to pull metadata about Kafk
 
 ### Using REST Proy to produce data
 
-POST data to Kafka REST Proxy to produce data
+POST data to Kafka REST Proxy to produce data. `POST /topics/<topic_name>`
 
 <p align="center"><img src="../images/produce_rest_proxy.png" height= "300"/></p>
 
-We have to include Avro schema. 
+We have to include Avro schema when sending Avro data. The schema data is a string. 
 
-Alwaus make sure to include the right Content-Type Header! 
+Always make sure to include the right Content-Type Header! If not, it is hard to debug. 
+
+The format is `application/vnd.kafka[.embedded_format].[api_version]+[serialization_format]`
 
 <p align="center"><img src="../images/header_rest_proxy.png" height= "300"/></p>
 
+Lesson 4 Ch 23 and 24 shows how to produce JSON and AVRO data using REST Proxy
 
+### Consuming data using REST proxy
+
+Consumption begins with a POST to create a consumer group
+`POST` to `/consumers/<group_name>` to create a consumer group
+
+To create a subscription:
+`POST` to `/consumers/<group_name>/instances/<instance_id>/subscription`
+- Important to specify Content type e.g. 'application/vnd.kafka.json.v2+json'
+- Successful response is 204
+
+To retrieve records:
+`GET` from `/consumers/<group_name>/instances/<instance_id>/records`
+- Include Accept header e.g. 'application/vnd.kafka.json.v2+json'
+- if no Accept header, will return a 406 error
+- successful record is 200 with 0 or more error
+
+To unsubscribe a subscription:
+`DELETE` to `/consumers/<group_name>/instances/<instance_id>/subscriptions` 
+- Includes Accept header. 
+- Successful is 204 with no content. Deletion acknowledged.
+
+Lesson 4 Ch 26 shows how to post consumer group, subscribe to a topic, and consume data using HTTP REST Proxy
 
 ### Resources
 
-- [Python fastavro Library](https://fastavro.readthedocs.io/en/latest/index.html)
-- [Apache Avro specification](https://avro.apache.org/docs/1.8.2/spec.html)
-- [Why Kafka prefers Avro](https://www.confluent.io/blog/avro-kafka-data/)
+[REST Proxy API documentation](https://docs.confluent.io/current/kafka-rest/api.html)
