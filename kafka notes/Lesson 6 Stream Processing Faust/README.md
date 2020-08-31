@@ -1,26 +1,24 @@
-_Notes on Kafka Lesson 5 | August 2020_ 
+_Notes on Kafka Lesson 6 | August 2020_ 
 
-# Stream Processing Fundamentals
+# Stream Processing with Faust
 
 # Glossary
 
-- **Join (Streams)** - The process of combining one or more streams into an output stream, typically on some related key attribute.
-- **Filtering (Streams)** - The process of removing certain events in a data stream based on a condition
-- **Aggregating (Streams)** - The process of summing, reducing, or otherwise grouping data based on a key attribute
-- **Remapping (Streams)** - The process of modifying the input stream data structure into a different output structure. This may include the addition or removal of fields on a given event.
-- **Windowing (Streams)** - Defining a period of time from which data is analyzed. Once data falls outside of that period of time, it is no longer valid for streaming analysis.
-- **Tumbling Window (Streams)** - The tumbling window defines a block of time which rolls over once the duration has elapsed. A tumbling window of one hour, started now, would collect all data for the next 60 minutes. Then, at the 60 minute mark, it would reset all of the data in the topic, and begin collecting a fresh set of data for the next 60 minutes.
-- **Hopping Window (Streams)** - Hopping windows advance in defined increments of time. A hopping window consists of a window length, e.g. 30 minutes, and an increment time, e.g. 5 minutes. Every time the increment time expires, the window is advanced forward by the increment.
-- **Sliding Window (Streams)** - Sliding Windows work identically to Hopping Windows, except the increment period is much smaller -- typically measured in seconds. Sliding windows are constantly updated and always represent the most up-to-date state of a given stream aggregation.
-- **Stream** - Streams contain all events in a topic, immutable, and in order. As new events occur, they are simply appended to the end of the stream.
-- **Table** - Tables are the result of aggregation operations in stream processing applications. They are a roll-up, point-in-time view of data.
-- **Stateful** - Stateful operations must store the intermediate results of combining multiple events to represent the latest point-in-time value for a given key
+- **DSL** - Domain Specific Language. A metaprogramming language for specific tasks, such as building database queries or stream processing applications.
+- **Dataclass (Python)** - A special type of Class in which instances are meant to represent data, but not contain mutating functions
+- **Changelog** - An append-only log of changes made to a particular component. In the case of Faust and other stream processors, this tracks all changes to a given processor.
+- **Processor (Faust)** - Functions that take a value and return a value. Can be added in a pre-defined list of callbacks to stream declarations.
+- **Operations (Faust)** - Actions that can be applied to an incoming stream to create an intermediate stream containing some modification, such as a group-by or filter
 
 ---
 
-## Stream Processing Basics
+## Faust Stream Processing
 
-Stream processing never stops running.
+Faust was created at Robinhood. Stream processing framework written and usable in Python. 
+
+The goal was to replicate Kafka Streams in Python. Shares conceptual design patterns with Kafka Streams.
+
+Other processing framework in Java and Scala (Kafka Streams). 
 
 The core stream processing tasks are:
 - combining
@@ -28,122 +26,207 @@ The core stream processing tasks are:
 - aggregating
 - reducing
 
-### Combining or Joining Streams
+Faust is a native Python API, not a Domain Specific Language (DSL) for metaprogramming.
 
-Combining two or more streams and creating a single output stream. 
+Faust requires no external dependency other than Kafka. Does not require resource manager like Yarn or Mesos. 
 
-Joined streams share some common attribute across the data in all of the streams. We might use `user_id` to merge user streams.
+### Writing Faust application
 
-Usually windowing is used to reset the state once a time window is reached. 
+See Lesson 6 Chapter 5 on how to write Faust application in Python
 
-### Filtering Streams
+Snippet:
+```
+import faust
 
-Filtering removes unwanted data from an inputs stream and output desired data into a new stream.
+app = faust.App('hello-world-faust', broker = 'localhost:9092')
 
-Desirable when data clients don't access to all data for throughput or security reasons.
+topic = app.topic("com.udacity.streams.clickevents")
 
-Apply filter earlier rather than later, to scale better and analyze less data.  
+@app.agent(topic) # each time an event happen on this topic, the event is passed to function
+async def clickevent(clickevents):
 
-### Remapping Streams
+    #Print each event inside the for loop
+    async for clickevent in clickevents:
+        print(clickevent)
 
-Remapping transforms an input event and outputs it in a different form to a new stream.
+if __name__ == "__main__":
+    app.main()
 
-An example is changing output to a different format, removing a field in the data, renaming field, or moving data fields.
+```
 
-One example is removing personally identifiable information (e.g. email, phone, address). 
+Run `python filename.py worker` in terminal to start printing the clickevents.
 
-### Aggregating Streams
+Every Faust application as an app which instantiates the faust application. 
 
-Aggregationg involves taking two or more distinct events and creating one or more new events based on an aggregation function.
+The application must be assigned a topic to subscribe to.
 
-Aggregation function: Max, min, sum, topN, Histograms, sets, lists, and more.
+An output table or stream received the output of the processing. 
 
-Aggregates in streaming almost always involve a timeframe. 
+Asynchronous function is decorated with an `agent`
 
-If the topic is compacted, the data would be the latest. If the topic is expired, the data is not the latest, we need to define a time window.
+### Serialization and Deserialization
 
-## Handling Time
+Dataclasses are new in Python 3.7. 
 
-In stream processing, we don't look at all the data at once. We look at a start and end time (**windowing**)
+Dataclass is a special type of Class instance. They can be marked as frozen, which makes them immutable. 
 
-Windows can also be set to the past. E.g. One hour yesterday from 7-8 pm. 
+```
+from dataclasses import dataclass
 
-Windows are the building block of stream processing. 
+@dataclass(frozen=True)
+class Purchase:
+	username: str = "default"
+	currency: str = ""
+	amount: int = 0
+```
 
-### Tumbling Window
+dataclass object require type annotations on fields and will enforce these type constraints on creation.
 
-Tumbling window is a fixed period of time that rolls over after the fixed window has ended. 
+Dataclass can be paired with `asdict` function to quickly transform dataclasses into dictionaries.
 
-<p align="center"><img src="../images/tumbling_window.png" height= "290"/></p>
+Try to use dataclasses when using Faust. It makes clear the structure of the data we want.
 
-When the new time window is reached, data is cleared and starts over again. 
+### Deserialization
 
-Tumbling windows do not overlap
+Deserialization is handled by specifying `key_type` and `value_type` to the Faust topic.
 
-Tumbling windows do not have gaps between windowed periods
+E.g. `topic = app.topic("topic_name", key_type = str, value_type = Purchase)`
 
-Example: Measure the link that was clicked the most in the past 10 minutes.
+In order to use data model classes, the Purchase class has to inherit from faust.Record
 
-### Hopping Window
+```
+class Purchase (faust.Record, validation = True, serializer = 'json'):
+	username: str
+	currency: str
+```
 
-Hopping window have a fixed increment which advances the window. 
+Unfortunately, at the time of writing, Faust has no support for Avro. Custom deserializer has to be used.
 
-<p align="center"><img src="../images/hopping_window.png" height= "290"/></p>
+Setting serializer type to json enables Faust to deserialize data in this format by default.
 
-Hopping windows have both a duration and an increment by which they are advanced.
+`validation = True` will enforce data being deserialized from Kafka to match the expected type. If we expect `str` but get an `int`, Faust will raise an error. 
 
-Hopping windows can overlap with previous windows.
+### Serialization
 
-Hopping windows can have gaps if the increment time is greater than the duration period.
+Faust Serialization leverages the same `faust.Record`. Faust run the serializer **in reverse** to serialize the data for the output stream. 
 
-Example: Measure the last 10 minutes of click events on a 1-minute rolling basis
+Here we have two serializer in succession, json and then base64 encode it.
+If we are deserializing we will base64 decode the data and then unpack the json into our model. 
 
-### Sliding Window
+```
+class Purchase (faust.Record, validation = True, serializer = 'binary|json'):
+	username: str
+	currency: str
+```
 
-Sliding windows are hopping windows that increment in real time.
+In Faust it is very simple to modify a stream, simply
+1. Define the new old and new class with faust.Record
+2. Create a new topic for the processed/sanitized data
+3. Modify the incoming data using the new object class
+4. Send the modified data to the new topic, specifying the key and value
 
-<p align="center"><img src="../images/hopping_window.png" height= "290"/></p>
+See Lesson 6 Chapter 8 for the example!
 
-Similar to hopping window, except the increment is very short and updates in real time. 
+### Storage in Faust
 
-Sliding window always have the latest data. 
+Faust stores its changelog in Kafka (in a topic) and uses RocksDB for local state. 
 
-Sliding windows have no gaps between windows.
+If a fault occurs, Kafka will use the changelog to rebuild state (restore topic to the previous state).
 
-Sliding windows overlap with previous windows.
+In-memory storage should only be used for test and local development. Data is lost in memory during restarts so Faust has to rebuild the state. If there are a lot of events, it might take a long time to rebuild state which is unacceptable in production. Further, the state may not fit in memory.
 
-## Streams versus Table
+The better option to store state locally is to use RocksDB. **RocksDB stores the state on disk**. As changes are made, they are stored in RocksDB and sent to Kafka.  
 
-Table implies state (represent condition at a point in time) and shows aggregated/roll-up views. Tables are result of aggregation operations in stream processing applications.
+It is always recommended to use RocksDB in production. Simply need the library installed to make use of it. 
 
-Streams is an never-ending, immutable, ordered series of events.
+### Message Life Cycle 
 
-Streams are commonly used to **enrich** data with new fields. 
+Faust streams are simply infinite asynchronous iterables.
 
-Streams and Tables are **complementary tools**.
-- they describe processing output
-- streams output an unbounded sequence of events
-- tables output an aggregated view of the data
+Faust handles consumption, consumer groups, and offsets for us, in addition to managing message acknowledgements. 
 
-### Data storage
+Faust uses aiokafka to interact with Kafka. 
 
-Table operations are stateful, meaning we must **store the results of combining multiple events** to represent the point-in-time value for data.
+Faust uses one underlying subscription to topics for all agents. 
 
-Table operations require some form of storage.
-- in-memory storage
-- dedicated databases RocksDB
+Faust applications may forward processed messages to another stream using the `topic.send<data>` function at the end of the processing loop. 
 
-Stream processing frameworks require a changelog 
-- Changelog topics are log compaceted
-- changelog ensures fault tolerance and helps in recovery
+### Filtering streams
 
-RocksDB was a **highly optimized local state store** built by Facebook. Always use RocksDB in production. In memory storage is not appropriate for production (may be ok for personal projects). 
+Here is an example of how filter can be used to select certain values in stream data. 
+```
+@app.agent(clickevents_topic)
+async def clickevent(clickevents):
 
-RocksDB dramatically speeds reboot/recovery times. Used by all streaming frameworks.
+    async for ce in clickevents.filter(lambda x: x.number >= 100):
 
+        # Send the message to the `popular_uris_topic` with a key and value.
+        await popular_uris_topic.send(key=ce.uri, value=ce)
+```
+
+### Stream processors
+
+Processors are functions that take a value and return a value and can be added in a pre-defined list of callbacks to your stream declarations.
+
+Processors promote reusability in your code. 
+
+Processors may execute synchronously or asynchronously using the `asyn` keyword when defining functions.
+
+All defined processors will run in the order they were defined, before the final value is generated.
+
+Example:
+```
+def add_score(record): 
+    record.score = random.random()
+    return record
+
+@app.agent(source_topic)
+async def record(records):
+
+    records.add_processor(add_score) # add processor callback to stream
+    async for re in records:
+        await scored_topic.send(key=re.uri, value=re)
+```
+
+### Faust Operations
+
+Faust operations are actions that can be applied to an incoming stream to create an intermediate stream containing some modifications such as group by or filter. 
+
+- `group_by` operation ingests every incoming events from a source topic, and emits it to an intermediate topic with the newly specified key
+- `filter` operations uses boolean function to determine if a record should be kept.  
+- `take` opreation gather up multiple events in the stream before processing them. For example, to take 100 value at a time. But it may hang if the last hundredth message is never received. Need to add `within` `datetime.timedelta` argument to this function. 
+
+## Tables in Faust
+
+Tables have dict-like syntax. 
+
+Tables are defined with `app.table`.
+
+Tables must be co-partitioned with the streams they are aggregating. Use `group_by` to ensure co-partitioning. 
+
+See Lesson 6 Ch. 16 on how to group by. 
+
+### Windowing in Faust
+
+Faust provides two windowing methods: hopping and tumbling. 
+
+```
+tumbling_table = table.tumbling(size=timedelta(minutes=5))
+
+hopping_table = table.hopping(
+	size=timedelta(minutes=5),
+	step=timedelta(minutes=1),
+	expires=timedelta(minutes=60))
+```
+
+Windowing applies to Tables only.
+
+Faust has semantincs for classifying which pool of data is desired from a window:
+- `current()`: get value closest to current local time
+- `now()`: get value closest to current local time
+- `relative_to_now()`
 
 ### Resources
 
-- [Streams and Tables article](https://www.michael-noll.com/blog/2018/04/05/of-stream-and-tables-in-kafka-and-stream-processing-part1/)
-- [RocksDB](https://rocksdb.org/)
-- [Kafka Streams state](https://docs.confluent.io/current/streams/architecture.html#state)
+- [Faust](https://faust.readthedocs.io/en/latest/introduction.html)
+- [Faust operations](https://faust.readthedocs.io/en/latest/userguide/streams.html#operations)
