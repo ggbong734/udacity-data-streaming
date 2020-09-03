@@ -131,6 +131,8 @@ Transforming data from internal representation into a format suitable for data s
 
 #### Producer Configuration
 
+[Python Kafka use case example](https://github.com/confluentinc/confluent-kafka-python#usage)
+
 [Configuration options for kafka python](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)
 
 Always set `client.id` for improved logging and debugging!
