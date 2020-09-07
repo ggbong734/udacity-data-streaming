@@ -1,219 +1,205 @@
-_Notes on Spark Streaming Lesson 3 | September 2020_ 
+_Notes on Spark Streaming Lesson 4 | September 2020_ 
 
-# Intro to Spark Streaming
+# Structured Streaming APIs
 
 # Glossary
 
-- **RDD (Resilient Distributed Dataset)** : The fundamental data structure of the Spark Core component. An immutable distributed collection of objects.
-- **DataFrame** : A data structure of the Spark SQL component. A distributed collection of data organized into named columns.
-- **Dataset** : A data structure of the Spark SQL component. A distributed collection of data organized into named columns and also strongly typed.
-- **DAG (Directed Acyclic Graph)**: Each Spark job creates a DAG which consists of task stages to be performed on the clusters.
-- **Logical plan** : A pipeline of operations that can be executed as one stage and does not require the data to be shuffled across the partitions — for example, map, filter, etc.
-- **Physical plan** : The phase where the action is triggered, and the DAG Scheduler looks at lineage and comes up with the best execution plan with stages and tasks together, and executes the job into a set of tasks in parallel.
-- **DAG Scheduler**: DAG scheduler converts a logical execution plan into physical plan.
-- **Task** : A task is a unit of work that is sent to the executor.
-- **Stage** : A collection of tasks.
-- **State** : Intermediary and arbitrary information that needs to be maintained in streaming processing.
-- **Lineage Graph**: A complete graph of all the parent RDDs of an RDD. RDD Lineage is built by applying transformations to the RDD.
+- **Lazy evaluation**: An evaluation method for expressions in which expressions are not evaluated until their value is needed.
+- **Action**: A type of function for RDDs/DataFrames/Datasets where the **values are sent to the driver. A new RDD/DataFrame/Dataset is not formed**.
+- **Transformation**: A lazily evaluated function where **a new RDD/DataFrame/Dataset is formed***. There are narrow and wide types of transformations - narrow transformations occur within the same partition, whereas wide transformations may occur across all partitions.
+- **Sink**: Place for streaming writes (output).
 ---
 
-## Spark Components
+## RDD/DataFrame Functions 
 
-<p align="center"><img src="images/spark_components.png" height= "185"/></p>
+There are two types of Apache Spark RDD operations - transformations and actions. 
 
-**Core**
-- Contains the basic functionality of Spark. Also home to the API that defines RDDs, which is Spark's main programming abstraction.
+Transformations produce a new RDD from an existing RDD. Actions trigger evaluation of expressions and send data back to the driver.
 
-**SQL**
-- Package for working with structured data. It allows querying data via SQL as well as Apache Hive. It supports various sources of data, like Hive tables, Parquet, JSON, CSV, etc.
+Transformations build an RDD lineage. For example, this code `rdd.map().filter().join().repartition()` builds a lineage of map -> filter -> join -> repartition. You can see this lineage through the .explain operation or through the Spark UI.
 
-**Streaming**
-- Enables processing of live streams of data. Spark Streaming provides an API for manipulating data streams that are similar to Spark Core's RDD API.
+The resulting RDD from a transformation is always different from its parent RDD. It can be smaller or bigger or the same size (e.g. map).
 
-**MLlib**
-- Provides multiple types of machine learning algorithms, like classification, regression, clustering, etc. This component will not be a focus of this course.
+Transformations also have two types of operations - **narrow and wide**. Narrow is map-like, and wide is reduce-like.
 
-**GraphX**
-- Library for manipulating graphs and performing graph-parallel computations. This library is where you can find PageRank and triangle counting algorithms. This component will not be a focus of this course.
+You may persist an RDD in memory using the **persist** method if there are many transformations and actions applied, so that Spark keeps the RDD around the cluster for faster access the next time.
 
-Spark can be run on Hadoop cluster using three methods: standalone, YARN, MESOS
+### Lazy Evaluation
 
-## RDD 
+Lazy evaluation means an expression is not evaluated until a certain condition is met. In Spark, this is when an action triggers the DAG. Transformations are lazy and do not execute immediately. 
 
-RDD stands for **Resilient Distributed Dataset**:
-- **Resilient** because its fault-tolerance comes from maintaining RDD lineage, so even with loss during the operations, you can always go back to where the operation was lost.
-- **Distributed** because the data is distributed across many partitions and workers.
-- **Dataset** is a collection of partitioned data. RDD has characteristics like in-memory, immutability, lazily evaluated, cacheable, and typed (we don't see this much in Python, but you'd see this in Scala or Java).
+Spark adds them to a DAG of computation, and only when the driver requests some data (with an action function) does this DAG actually get executed.
 
-Spark RDDs are fault tolerant as they track data lineage information to rebuild lost data automatically on failure.
+Advantages of lazy evaluation:
+- Users can organize their Apache Spark program into smaller operations. It reduces the number of passes on data by grouping operations.
+- Saves resources by not executing every step. It saves the network trips between driver and cluster. This also saves time.
 
-SparkContext example:
+### Transformations
+
+- Transformations are expressions that are lazily evaluated and can be chained together. Then, as we discussed in the previous lesson, Spark Catalyst will use these chains to define stages, based on its optimization algorithm.
+
+- There are two types of transformations - wide and narrow. Narrow transformations have the parent RDDs in the same partition, whereas parent RDDs of the wide transformations may not be in the same partition.
+
+### Actions
+
+Actions are operations that produce non-RDD values. Actions send the values from the executors to be stored to the driver.
+
+Unlike transformations, which are lazily evaluated, actions evaluate the expression on RDD.
+
+A few action functions that are used often are:
+
+- save()
+- collect() - return entire content of RDD into driver program
+- take(n) - return n number of elements, it will return different results each time
+- foreach() - to apply operation to each element of RDD but not return value to driver
+- count()
+- reduce()
+- getNumPartitions()
+- aggregate()
+
+<p align="center"><img src="images/common_transformations.png" height= "185"/></p>
+
+### Structured Streaming APIs
+
+<p align="center"><img src="images/join_types.png" height= "185"/></p>
+
+Full outer joins not supported for streams as events may arrive later than the original timestamps and thus may create unwanted effects in the final table. 
+
+Watermark handles two problems: 
+- determine which data can be accepted in the popeline
+- discard state that is too old from the state store
+
+Specify two columns to compute watermark:
+- column defining event time
+- value for delay threshold
+
+Watermark allows late data to be reaggregated into past groups. We need to specify the delay-threshold or the amount of time the computer will wait for old data. 
+
+Watermark decides which data can be dropped or included. We can achieve stateful aggregation using watermark.
+
+Example code:
 ```
-from pyspark import SparkConf, SparkContext
-
-conf = SparkConf().setMaster("local[2]").setAppName("RDD Example")
-sc = SparkContext(conf=conf)
-
-# different way of setting configurations 
-#conf.setMaster('some url')
-#conf.set('spark.executor.memory', '2g')
-#conf.set('spark.executor.cores', '4')
-#conf.set('spark.cores.max', '40')
-#conf.set('spark.logConf', True)
-
-# sparkContext.parallelize materializes data into RDD 
-# documentation: https://spark.apache.org/docs/2.1.1/programming-guide.html#parallelized-collections
-rdd = sc.parallelize([('Richard', 22), ('Alfred', 23), ('Loki',4), ('Albert', 12), ('Alfred', 9)])
-
-rdd.collect() # [('Richard', 22), ('Alfred', 23), ('Loki', 4), ('Albert', 12), ('Alfred', 9)]
-
-# create two different RDDs
-left = sc.parallelize([("Richard", 1), ("Alfred", 4)])
-right = sc.parallelize([("Richard", 2), ("Alfred", 5)])
-
-joined_rdd = left.join(right)
-collected = joined_rdd.collect()
-
-collected #[('Alfred', (4, 5)), ('Richard', (1, 2))]
+    # TODO use watermark of 10 seconds
+    left_with_watermark = left \
+        .selectExpr("row_id AS left_row_id", "left_timestamp") \
+        .withWatermark("left_timestamp", "10 seconds")
 ```
 
-SparkSession example:
-```
+<p align="center"><img src="images/watermark.png" height= "300"/></p>
 
-# Notice we’re using pyspark.sql library here
+### Query plans
+
+We can apply `.explain()` at the end of a query to visualize the query plan. 
+
+- FileScan informs how the original file was scanned and loaded into the RDD. You can see the format of the file, the location of the file, and the column names (if appropriate).
+- Spark uses BroadcastHashJoin when the size of the data is below BroadcastJoinThreshold. In the demo, we’re using small sized data and thus we see that the JOIN query is using BroadcastHashJoin.
+
+### Writing to ouput sinks
+
+There are a few modes for writing to output sinks:
+
+- Append - Only new rows are written to the output sink.
+- Complete - All the rows are written to the output sink. This mode is used with aggregations.
+- Update - Similar to complete, but only the updated rows will be written to the output sink.
+
+The usefulness of an output sink is to support pipeline fault tolerance by saving output to a stable destination.
+
+### State management
+
+State management became important when we entered the streaming realm. You always want to save the metadata and data for the state for many purposes - like logging, metrics, metadata about your data, etc.
+
+Stateless transformations are like map(), filter(), and reduceByKey(). Each DStream is a continuous stream of RDDs. This type of transformation is applied to each RDD.
+
+Stateful transformations track data across time. This means that the stateful transformation requires some shuffles between keys in key/value pair. The two main types of shuffles are windowed operations:
+- `updateStateByKey()` - Used to track state across events for each key. updateStateByKey() iterates over all incoming batches and affects performance when dealing with a large dataset.
+- `mapWithState()` - Only considers a single batch at a time and provides timeout mechanism.
+
+Checkpointing versus Persisting:
+- Persist keeps the RDD lineage
+- Checkpoints does not store the RDD lineage
+- Checkpoint requires a location in the computer to write to disk
+
+### Stateful vs Stateless
+
+State means the intermediate data maintained between records.
+
+Stateful stream processing means past events can affect the way current and future events are processed. For example, aggregations (total count of a key in a given interval)
+
+Stateful systems can keep track of windows and perform counts. These can be checkpointed.  Checkpoint location has to be a distributed system, like HDFS, not in C drive.
+
+Stateless stream processing is easy to scale up because events are processed independently. Can launch multiple processors to deal with additional throughput.
+
+We always want to store state when engaged in stateful stream processing.
+
+We always want to use checkpointing when there are changes in state. (e.g. aggregations over a moving interval)
+
+**Importance of state store**
+
+The purpose of state store is to provide a reliable place in your services so that the application (or the developer) can read the intermediary result of stateful aggregations.
+
+In the case of driver or worker failures, Spark is able to recover the processing state at the point right before the failure. 
+
+Can use in-memory hashmap, HDFS, Cassandra, AWS, DynamoDB. State store has been implemented in Spark Structured Streaming. Users can recover from the point of failure much more easily now. 
+
+The state stored is supported by HDFS compatible file system. To guarantee recoverability, Spark recovers the two most recent versions.
+
+State store by implementing `org.apache.spark.sql.execution.streaming.state.StateStore properties`
+
+Example code for checkpointing:
+```
 from pyspark.sql import SparkSession
 
-spark = SparkSession.builder \
-        .master("local") \
-        .appName("CSV file loader") \
-        .getOrCreate()
+def checkpoint_exercise():
+    """
+    note that this code will not run in the classroom workspace because we don't have HDFS-compatible file system
+    :return:
+    """
+    spark = SparkSession.builder \
+            .master("local") \
+            .appName("Checkpoint Example") \
+            .getOrCreate()
 
-# couple ways of setting configurations
-#spark.conf.set("spark.executor.memory", '8g')
-#spark.conf.set('spark.executor.cores', '3')
-#spark.conf.set('spark.cores.max', '3')
-#spark.conf.set("spark.driver.memory", '8g')
+    df = spark.readStream \
+        .format("rate") \
+        .option("rowsPerSecond", 90000) \
+        .option("rampUpTime", 1) \
+        .load()
 
-file_path = "./AB_NYC_2019.csv"
-# Always load csv files with header=True
-df = spark.read.csv(file_path, header=True)
+    rate_raw_data = df.selectExpr("CAST(timestamp AS STRING)", "CAST(value AS string)")
 
-df.printSchema()
+    stream_query = rate_raw_data.writeStream \
+        .format("console") \
+        .queryName("Default") \
+        .option("checkpointLocation", "/tmp/checkpoint") \ #this checkpoint location requires HDFS-like filesystem
+        .start()
 
-df.select('neighbourhood').distinct().show(10, False)
-```
-
-## Partitioning in Spark
-
-By default in Spark, a partition is created for each block of the file in HDFS (128MB is the default setting for Hadoop) if you are using HDFS as your file system. If you read a file into an RDD from AWS S3 or some other source, Spark uses 1 partition per 32MB of data. 
-
-There are a few ways to bypass this default upon creation of an RDD, or reshuffling the RDD to resize the number of partitions, by using `rdd.repartition(<the partition number you want to repartition to>)`. For example, `rdd.repartition(10)` should change the number of partitions to 10.
-
-In local mode, Spark uses as many partitions as there are cores, so this will depend on your machine. You can override this by adding a configuration parameter `spark-submit --conf spark.default.parallelism=<some number>`.
-
-#### Hash partitioning
-
-Hash partitioning is defined by
-
-`partition = key.hashCode() % numPartitions`
-
-This mode of partitioning is used when you want to evenly distribute data across partitions.
-
-#### Range partitioning
-
-Range partitioning divides each partition in a continuous but non-overlapping way.
-
-Range partitioning would come into play where you partition the `employees table` by `employee_id`, like this:
+if __name__ == "__main__":
+    checkpoint_exercise()
 
 ```
-PARTITION BY RANGE (employee_id) (
-    PARTITION p0 VALUES LESS THAN (11),
-    PARTITION p0 VALUES LESS THAN (21),
-    PARTITION p0 VALUES LESS THAN (31),
-    ...
-)
-```
-We would normally use range partition over a timestamp. We can use `partitionByRange()` function to partition data into some kind of groups.
 
-## DataFrames and Datasets 
+### Troubleshooting OutofMemory Error
 
-DataFrames can be thought as tables in a relational database, or dataframes in Python’s pandas library. DataFrames provide memory management and optimized execution plans.
+Can happen when data to process is too large or too many shuffles is occurring. 
 
-Datasets is strongly typed, unlike DataFrames. They are only available in Java or Scala version of Spark.
+We can use properties like `Spark.executor.memory` and `Spark.driver.memory` to set the amount of memory to allocate.
 
-RDDs, Datasets, and DataFrames still share common features which are: immutability, resilience, and the capability of distributed computing in-memory.
+We can set `spark.sql.shuffle.partitions` configures the number of partitions when shuffling such as aggregation. `spark.default.parallelism` returns the default number of RDD partitions from operations such as map or flatmap.
 
-RDDs are in the Core component, while DataFrames and Datasets are in the SQL component. RDDs and DataFrames are both immutable collections of datasets, but DataFrames are organized into columns. Datasets are organized into columns also, and also provide type safety.
+If the job takes too long, we can increase the number of nodes.
 
-## Intro to Spark Streaming and DStream
+### Key considerations
 
-Spark DStream, Discretized Stream, is the basic abstraction and building block of Spark Streaming. 
+There are a few ways to tune your Spark Structured Streaming application. But before that, go through your application and try to answer these questions.
 
-DStream is a continuous stream of RDDs. It receives input from various sources like Kafka, Flume, Kinesis, or TCP sockets. 
-
-<p align="center"><img src="images/dstream.png" height= "150"/></p>
-
-### Spark Structured Streaming
-
-Structured Streaming is built on top of SparkSQL
-
-Internally, Structured Streaming is processed using a micro-batch. It processes data streams as a series of small batch jobs.
-
-Stuctured Streaming application can now guarantee fault-tolerance using checkpointing.
-
-The advantages of using Structured Streaming are:
-
-- Continuous update of the final result
-- Can be used in either Scala, Python, or Java
-- Computations are optimized due to using the same Spark SQL component (Catalyst)
-
-Structured Streaming now decoupes the state management (saving state to store) and checkpointing metadata. Because these two limitations are decoupled from the application, the developer is now able to exercise fault-tolerant end-to-end-execution with ease, 
-
-### Spark UI/DAGS
-
-Spark UI is a web interface that allows inspection of jobs, stages, storages, environment, and executors in this page, as well as the visualized version of the DAGs (Directed Acyclic Graph) of the Spark job.
-
-Vertices of DAGS are RDDs and the edges are operations like transformation functions applied on RDDs.
-
-DAG is an optimized execution plan with minimized data shuffling. Spark creates a DAG when an action is called and submits to the DAG scheduler. DAG Scheduler divides operators into stages of tasks. Stages are passed to Task Scheduler.
-
-To set port number of Spark UI
-
-`spark = SparkSession.builder.master(local).config("spark.ui.port", 3000)`
-
-The Spark UI becomes very important when you want to debug at system level. It tells you how many stages you’ve created, the amount of resources you’re using, logs, workers, and a lot of other useful information, like lineage graph, duration of tasks, aggregated metrics, etc.
-
-The lineage graph is the history of RDD transformations, and it’s the graph of all the parent RDDs of the current RDD.
-
-Difference between Spark DAGs and Lineage graphs:
-> A lineage graph shows you the history of how the final SparkRDD/DataFrame has been created. With the application of transformation functions, you’re building the lineage graph. A DAG shows you different stages of the Spark job. A compilation of DAGs could be the lineage graph, but a DAG contains more information than just stages - it tells you where the shuffles occurred, actions occurred, and with transformations, what kind of RDDs/DataFrames have been generate
-
-### Spark Stages
-
-A stage is a group of tasks. 
-
-### Schema
-
-Example:
-```
-from pyspark.sql import SparkSession, Row
-from pyspark.sql.types import *
-
-schema = StructType([
-        StructField("time", TimestampType(), True),
-        StructField("address", StringType(), True),
-        StructField("phone_number", IntegerType(), True)
-    ])
-
-rows = [Row(time= 13211311, address='123 Main Street', phone_number= 1112223333),
-            Row(time= 13211313, address='872 Pike Street', phone_number= 8972341253)]
-
-df = spark.createDataFrame(data, schema = schema)
-```
-
+- Study the memory available for your application. Do you have enough memory to process your Spark job? If not, consider vertical scaling (improve hardware). If you do have enough memory but limited resources, consider horizontal scaling(add more machines).
+- Study your query plans - do they make sense? Are you doing unnecessary shuffles/aggregations? Can you reduce your shuffles?
+- What’s the throughput/latency of your data?
+- How are you saving your data? Are you persisting your data to memory or to disk only, or to both memory and disk?
+- Are you breaking your lineage anywhere?
 
 ### Resources
 
-- [Spark UI](https://databricks.com/blog/2015/06/22/understanding-your-spark-application-through-visualization.html)
-- [Project Tungsten](https://databricks.com/blog/2015/04/28/project-tungsten-bringing-spark-closer-to-bare-metal.html)
-- [Paper on Whole Stage Codegen](http://www.vldb.org/pvldb/vol4/p539-neumann.pdf)
+- [Stateful Stream Processing](https://databricks.com/blog/2016/02/01/faster-stateful-stream-processing-in-apache-spark-streaming.html)
+- [Stream-stream joins](https://databricks.com/blog/2018/03/13/introducing-stream-stream-joins-in-apache-spark-2-3.html)
+- [Spark journal](https://cacm.acm.org/magazines/2016/11/209116-apache-spark/fulltext)
