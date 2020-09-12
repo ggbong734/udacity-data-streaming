@@ -30,15 +30,15 @@ spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.11:2.3.4 --maste
 
 Here is a screenshot showing the output of Kafka consumer console to show that data was successfully produced in Kafka:
 
-<p align="center"><img src="screenshots/screenshot_kafka.png" height= "250"/></p>
+<p align="center"><img src="screenshots/screenshot_kafka.png" height= "320"/></p>
 
 Here is the output of the aggregation in Spark:
 
-<p align="center"><img src="screenshots/screenshot_progress_report_1.png" height= "250"/></p>
+<p align="center"><img src="screenshots/screenshot_progress_report_1.png" height= "320"/></p>
 
 Here is a screenshot of the process in Spark UI:
 
-<p align="center"><img src="screenshots/screenshot_spark_ui_1.png" height= "250"/></p>
+<p align="center"><img src="screenshots/screenshot_spark_ui_1.png" height= "320"/></p>
 
 ## Extra questions
 

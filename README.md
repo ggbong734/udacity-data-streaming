@@ -2,7 +2,7 @@
 
 Projects completed in the Udacity [Data Streaming Nanodegree](https://www.udacity.com/course/data-streaming-nanodegree--nd029) program.
 
-## Project 1: [Optimizing Public Transportation](https://https://github.com/ggbong734/udacity-data-streaming/tree/master/Project%20-%20Optimizing%20Public%20Transportation)
+## Project 1: [Optimizing Public Transportation](https://github.com/ggbong734/udacity-data-streaming/tree/master/Project%20-%20Optimizing%20Public%20Transportation)
 
 <p align="center"><img src="Project - Optimizing Public Transportation/images/apache_kafka.png" height= "185"/></p>
 
@@ -17,7 +17,7 @@ Constructed a streaming event pipeline around Apache Kafka and its ecosystem.
 
 Proficiencies used: Apache Kafka, Kafka Connect, Faust Stream processing, KSQL
 
-## Project 2: [SF Crime Statistics with Spark Streaming](https://https://github.com/ggbong734/udacity-data-streaming/tree/master/Project%20-%20SF%20Crime%20Statistics)
+## Project 2: [SF Crime Statistics with Spark Streaming](https://github.com/ggbong734/udacity-data-streaming/tree/master/Project%20-%20SF%20Crime%20Statistics)
 
 <p align="center"><img src="Notes - Spark Streaming\images\spark_streaming.png" height= "185"/></p>
 
