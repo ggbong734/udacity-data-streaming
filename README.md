@@ -15,5 +15,15 @@ Constructed a streaming event pipeline around Apache Kafka and its ecosystem.
 - Aggregated data using KSQL 
 - Configured the consumer to consume data from Kafka
 
-Proficiencies used: Apache Kafka, Kafka COnnect, Faust Stream processing, KSQL
+Proficiencies used: Apache Kafka, Kafka Connect, Faust Stream processing, KSQL
 
+## Project 2: [SF Crime Statistics with Spark Streaming](https://https://github.com/ggbong734/udacity-data-streaming/tree/master/Project%20-%20SF%20Crime%20Statistics)
+
+<p align="center"><img src="Notes - Spark Streaming\images\spark_streaming.png" height= "185"/></p>
+
+Created a Kafka server to produce data and ingested the data using Spark Structured Streaming.
+- Built a simple Kafka server (with Zookeeper) for producing data
+- Created a Spark consumer to perform data aggregation and joining
+- Modified SparkSession property parameters to optimize processing throughput
+
+Proficiencies used: Apache Kafka, Apache Spark, Spark Structured Streaming
